@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Jasmine Spec Runner v2.5.2</title>
+  <script src="../_bundles/autodiff.js"></script>
+  <style>
+    .page-content {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 18px;
+      font-family: sans-serif;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-content">
+    autodiff.js computed the 100th derivative of x<sup>x<sup>2</sup> + 1</sup> <span id="label-ms">...</span> times in a second.
+  </div>
+</body>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const label = document.getElementById('label-ms');
+
+  // Calculate the 1..10th derivatives of whatever function we get.
+  autodiff.setNumberOfDerivativesToCompute(100);
+
+  // Every two seconds, compute an expensive derivative 1000 times
+  // and note how long it took.
+  setInterval(function () {
+    const start = performance.now();
+
+    for (let i = 0; i < 1000; i++) {
+      const x = autodiff.variableEvaluatedAtPoint(.5);
+      const xSquared = autodiff.multiply(x, x);
+      const f = autodiff.pow(x, autodiff.add(xSquared, 1));
+      const result = autodiff.toValueAndDerivatives(f);
+    }
+    const end = performance.now();
+    const totalMs = end - start;
+    label.innerText = '' + 1000 * (1000 / totalMs | 0);
+  }, 2000);
+});
+</script>
+</html>
