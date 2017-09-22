@@ -1,6 +1,16 @@
+// This files contains functions for numeric operations on lists.
+
 function throwUnlessEqualLength(a: number[], b: number[]) {
   if (a.length !== b.length) {
     throw new Error('Lists are of different lengths')
+  }
+}
+
+export function logErrorIfNaN(a: number[]) {
+  for (let i = 0; i < a.length; i++) {
+    if (isNaN(a[i])) {
+      console.error(`autodiff.js has encountered NaN's in computation; this is probably not what you want and is due to some invalid math operation, like taking asin(1000) or raising something to a negative power which is not yet supported`)
+    }
   }
 }
 
@@ -83,34 +93,4 @@ export function negative(a: number[]) {
     i *= -1
   }
   return copy
-}
-
-// Given two polynomials like...
-//
-// f(x) = a[0] + a[1] x + a[2] x ^ 2 + a[3] x ^ 3 + ...
-// g(x) = b[0] + b[1] x + b[2] x ^ 2 + b[3] x ^ 3 + ...
-//
-// This returns the sum of coefficients that contribute
-// to term of order k in their product.
-//
-// If h(x) = f(x) g(x), then h_k -- the co-efficient next
-// to x ^ k -- in the result, consists of all pairs of
-// terms f_i and g_j such that i + j is k.
-export function convolve(
-  a: number[],
-  b: number[],
-  k: number,
-): number {
-  throwUnlessEqualLength(a, b)
-  if (k >= a.length) {
-    throw new Error(
-      `k = ${k} is too large a term for polynomials of degree ${b.length - 1}`
-    )
-  }
-
-  let total = 0
-  for (let i = 0; i < k + 1; i++) {
-    total += a[i] * b[k - i]
-  }
-  return total
 }

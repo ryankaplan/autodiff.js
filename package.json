@@ -1,16 +1,16 @@
 {
   "name": "autodiff",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A Javascript library for performing automatic differentiation",
   "repository": {
     "type": "git",
     "url": "https://github.com/ryankaplan/autodiff"
   },
-  "main": "dist-esm/autodiff.js",
-  "types": "dist-esm/autodiff.d.ts",
+  "main": "lib-esm/autodiff.js",
+  "types": "lib-esm/autodiff.d.ts",
   "scripts": {
-    "clean": "shx rm -rf _bundles dist dist-esm",
-    "build": "npm run clean && tsc -p . && tsc -m es6 --outDir dist-esm && webpack",
+    "clean": "shx rm -rf _bundles lib lib-esm",
+    "build": "npm run clean && tsc -p . && tsc -m es6 --outDir lib-esm && webpack",
     "watch": "webpack-dev-server --watch"
   },
   "author": "Ryan Kaplan",

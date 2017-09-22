@@ -1,8 +1,8 @@
 # autodiff.js
 
-This is a library for computing the derivatives of single variable functions. It works by using a method called automatic differentiation which is often more accurate than numerical integration and much faster than symbolic differentiation.
+This is a library for computing the derivatives of single variable functions. It uses a method called automatic differentiation which is often more accurate than numerical integration and much faster than symbolic differentiation.
 
-If you're interested in learning how this works, I recommend the paper 'An Introduction to Automatic Differentiation and MATLAB Object-Oriented Programming' by Richard Neidinger. The code in this library is based loosly in sections 5 and 6 of that paper.
+If you're interested in how it works, an excellent introduction is 'An Introduction to Automatic Differentiation and MATLAB Object-Oriented Programming' by Richard Neidinger. This library is loosely based on sections 5 and 6 of that paper.
 
 ## Usage
 
@@ -28,6 +28,29 @@ const f = autodiff.pow(
 // result is an array whose first value is f(PI), whose second
 // value is f'(PI), third value is f''(PI) and so on...
 const result = autodiff.toValueAndDerivatives(expression)
+```
+
+The following mathematical functions are supported...
+
+```ts
+add(a, b)
+subtract(a, b)
+multiply(a, b)
+divide(a, b)
+
+exp(a)
+log(a)
+
+pow(a, b) // right now only for b > 0
+sqrt(a)
+
+sin(a)
+cos(a)
+tan(a)
+
+asin(a)
+acos(a)
+atan(a)
 ```
 
 ## Performance

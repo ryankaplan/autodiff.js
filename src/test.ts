@@ -4,18 +4,23 @@ import {
   ISeries,
   SeriesOrNumber,
   toValueAndDerivatives,
+
   add,
   multiply,
   divide,
   sqrt,
   exp,
-  ln,
+  log,
   pow,
+
   sin,
   cos,
   tan,
+
+  asin,
+  acos,
+  atan,
 } from '../src/autodiff'
-import * as list from '../src/list'
 
 function expectDerivatives(series: SeriesOrNumber, expected: number[]) {
   const derivatives = toValueAndDerivatives(series as ISeries)
@@ -31,42 +36,6 @@ function expectDerivatives(series: SeriesOrNumber, expected: number[]) {
     expect(derivatives).toEqual(expected)
   }
 }
-
-describe('series list', () => {
-  it('should work on polynomials with order 0', () => {
-    // Given f(x) = 1 and g(x) = 1,
-    //
-    // h_0 = 1
-    const f = [1]
-    const g = [1]
-    expect(list.convolve(f, g, 0)).toEqual(1)
-  })
-
-  it('should work on polynomials with order 1', () => {
-    // Given f(x) = 1 + x and g(x) = 1 + x,
-    //
-    // h_0 = 1
-    // h_1 = 2
-    // h_2 = 1
-    const f = [1, 1]
-    const g = [1, 1]
-    expect(list.convolve(f, g, 0)).toEqual(1)
-    expect(list.convolve(f, g, 1)).toEqual(2)
-  })
-
-  it('should work on polynomials with order 2', () => {
-    // Given f(x) = 1 + x + 2 x ^ 2 and g(x) = 1 + x + 3 x ^ 2,
-    //
-    // h_0 = 1
-    // h_1 = 2
-    // h_2 = 6
-    const f = [1, 1, 2]
-    const g = [1, 1, 3]
-    expect(list.convolve(f, g, 0)).toEqual(1)
-    expect(list.convolve(f, g, 1)).toEqual(2)
-    expect(list.convolve(f, g, 2)).toEqual(6)
-  })
-})
 
 beforeEach(() => {
   setNumberOfDerivativesToCompute(3)
@@ -177,15 +146,15 @@ describe('series', () => {
     ])
   })
 
-  it('ln', () => {
+  it('log', () => {
     // At x = Math.E
     //
-    // f(x)   = ln(x * x)   = 2
+    // f(x)   = log(x * x)   = 2
     // f'(x)  = 2 / x       = 2 / e
     // f''(x) = - 2 / x ^ 2 = - 2 / e ^ 2
     // f'''(x) = 4 / x ^ 3  = 4 / e ^ 3
     let x = variableEvaluatedAtPoint(Math.E)
-    let value = ln(multiply(x, x))
+    let value = log(multiply(x, x))
     expectDerivatives(value, [
       2,
       2 / Math.E,
@@ -194,16 +163,16 @@ describe('series', () => {
     ])
   })
 
-  it('pow', () => {
+  it('pow works with two series arguments', () => {
     // At x = 2
     //
     // f(x)    = x ^ x
-    // f'(x)   = x ^ x (ln(x) + 1)
-    // f''(x)  = x ^ x (1 / x + (ln(x) + 1) ^ 2)
+    // f'(x)   = x ^ x (log(x) + 1)
+    // f''(x)  = x ^ x (1 / x + (log(x) + 1) ^ 2)
     // f'''(x) = TODO(ryan): fill this in
     const pt = 2
-    let x = variableEvaluatedAtPoint(pt)
-    let value = pow(x, x)
+    const x = variableEvaluatedAtPoint(pt)
+    const value = pow(x, x)
     expectDerivatives(value, [
       Math.pow(pt, pt),
       Math.pow(pt, pt) * (Math.log(pt) + 1),
@@ -211,6 +180,26 @@ describe('series', () => {
       28.574184025053153,
     ])
   })
+
+  // TODO(ryan): make this function work!
+  //
+  // it('pow works with negative powers', () => {
+  //   // At x = 2
+  //   //
+  //   // f(x)    = x ^ - 2 = 1 / 4
+  //   // f'(x)   = - 2 x  = - 4
+  //   // f''(x)  = - 2    = - 2
+  //   // f'''(x) = 0      = 0
+  //   const pt = 2
+  //   const x = variableEvaluatedAtPoint(pt)
+  //   const value = pow(x, -2)
+  //   expectDerivatives(value, [
+  //     Math.pow(pt, -2),
+  //     - 2 * pt,
+  //     - 2,
+  //     0,
+  //   ])
+  // })
 
   it('sin', () => {
     // At x = 2
@@ -265,6 +254,60 @@ describe('series', () => {
       s * s,
       2 * t * s * s,
       2 * s * s * s * s + 4 * t * t * s * s,
+    ])
+  })
+
+  it('asin', () => {
+    // At x = .5
+    //
+    // f(x) = asin(x)
+    // f'(x) = 1 / sqrt(1 - x ^ 2)
+    // f''(x) = x / (1 - x ^ 2) ^ (3 / 2)
+    // f'''(x) = (2 x ^ 2 + 1) / (1 - x ^ 2) ^ (5 / 2)
+    const pt = .5
+    const x = variableEvaluatedAtPoint(pt)
+    let value = asin(x)
+    expectDerivatives(value, [
+      Math.asin(pt),
+      1 / Math.sqrt(1 - pt * pt),
+      pt / Math.pow(1 - pt * pt, 3 / 2),
+      (2 * pt * pt + 1) / Math.pow(1 - pt * pt, 5 / 2),
+    ])
+  })
+
+  it('acos', () => {
+    // At x = .5
+    //
+    // f(x) = acos(x)
+    // f'(x) = - 1 / sqrt(1 - x ^ 2)
+    // f''(x) = - x / (1 - x ^ 2) ^ (3 / 2)
+    // f'''(x) = - (2 x ^ 2 + 1) / (1 - x ^ 2) ^ (5 / 2)
+    const pt = .5
+    const x = variableEvaluatedAtPoint(pt)
+    let value = acos(x)
+    expectDerivatives(value, [
+      Math.acos(pt),
+      - 1 / Math.sqrt(1 - pt * pt),
+      - pt / Math.pow(1 - pt * pt, 3 / 2),
+      - (2 * pt * pt + 1) / Math.pow(1 - pt * pt, 5 / 2),
+    ])
+  })
+
+  it('atan', () => {
+    // At x = .5
+    //
+    // f(x) = atan(x)
+    // f'(x) = 1 / (1 + x ^ 2)
+    // f''(x) = - 2 x / (x ^ 2 + 1) ^ 2
+    // f'''(x) = (6 x ^ 2 - 2) / (x ^ 2 + 1) ^ 3
+    const pt = .5
+    const x = variableEvaluatedAtPoint(pt)
+    let value = atan(x)
+    expectDerivatives(value, [
+      Math.atan(pt),
+      1 / (1 + pt * pt),
+      - 2 * pt / Math.pow(pt * pt + 1, 2),
+      (6 * pt * pt - 2) / Math.pow(pt * pt + 1, 3)
     ])
   })
 })
