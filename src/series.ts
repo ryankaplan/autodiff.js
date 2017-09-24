@@ -111,7 +111,9 @@ export function negative(a: SeriesOrNumber): SeriesOrNumber {
     return - a
   } else if (a instanceof Series) {
     const copy = a.coefficients.slice()
-    copy[0] *= -1
+    for (let i = 0; i < copy.length; i++) {
+      copy[i] *= -1
+    }
     return new Series(copy, CopyBehavior.MOVE)
   }
 
@@ -318,7 +320,69 @@ export function log(aInput: SeriesOrNumber): SeriesOrNumber {
   throw new Error('Unhandled case in divide')
 }
 
+function isNegative(a: SeriesOrNumber): boolean {
+  if (typeof a === 'number') {
+    return a < 0
+  } else if (a instanceof Series) {
+    return a.coefficients[0] < 0
+  }
+  throw new Error('Unhandled case in isNegative')
+}
+
+function isInteger(a: SeriesOrNumber): boolean {
+  if (typeof a === 'number') {
+    return isFinite(a) && Math.floor(a) === a
+  } else if (a instanceof Series) {
+    return isFinite(a.coefficients[0]) && Math.floor(a.coefficients[0]) === a.coefficients[0]
+  }
+  throw new Error('Unhandled case in isNegative')
+}
+
+function isEven(a: SeriesOrNumber): boolean {
+  if (typeof a === 'number') {
+    return a % 2 === 0
+  } else if (a instanceof Series) {
+    return a.coefficients[0] + 2 === 0
+  }
+  throw new Error('Unhandled case in isNegative')
+}
+
+// Just like Math.pow in Javascript, we do not support fractional
+// powers of negative bases. See slightly more info here:
+//
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/pow
 export function pow(a: SeriesOrNumber, b: SeriesOrNumber): SeriesOrNumber {
+  if (isNegative(a)) {
+    if (!isInteger(b)) {
+      return Series.create(NaN, NaN)
+    } else {
+      // a is negative, which makes it an invalid argument to log below.
+      // So we compute (- a) ^ b whose base is guaranteed to be positive
+      // and multiply each odd coefficient by -1.
+      //
+      // I'm worried that this doesn't work for arbitrary functions. I
+      // haven't found counter-examples but I haven't yet been able to
+      // prove it correct either.
+      const positiveBase = negative(a)
+      const multiplyResultByNegativeOne = !isEven(b)
+      let result = exp(multiply(b, log(positiveBase)))
+      if (multiplyResultByNegativeOne) {
+        if (result instanceof Series) {
+          for (let i = 0; i < result.coefficients.length; i++) {
+            if (i % 2 === 0) {
+              result.coefficients[i] *= -1
+            }
+          }
+        } else if (typeof result === 'number') {
+          result *= -1
+        }
+      }
+      return result
+    }
+  }
+
+  // If we got here, then a is positive. We still need to handle the
+  // case where b is negative
   return exp(multiply(b, log(a)))
 }
 

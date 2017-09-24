@@ -3,6 +3,7 @@ export {
   subtract,
   multiply,
   divide,
+  negative,
 
   sqrt,
   pow,

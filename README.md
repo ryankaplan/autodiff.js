@@ -1,6 +1,6 @@
 # autodiff.js
 
-This is a library for computing the derivatives of single variable functions. It uses a method called automatic differentiation which is often more accurate than numerical integration and much faster than symbolic differentiation.
+This is a library for efficiently and accurately computing the derivatives of single variable functions. It uses a method called automatic differentiation.
 
 If you're interested in how it works, an excellent introduction is 'An Introduction to Automatic Differentiation and MATLAB Object-Oriented Programming' by Richard Neidinger. This library is loosely based on sections 5 and 6 of that paper.
 
@@ -41,7 +41,7 @@ divide(a, b)
 exp(a)
 log(a)
 
-pow(a, b) // right now only for b > 0
+pow(a, b)
 sqrt(a)
 
 sin(a)
@@ -55,4 +55,4 @@ atan(a)
 
 ## Performance
 
-autodiff.js is way faster than symbolic differentiation for most equations. x ^ (x ^ 2 + 1) takes a really long time to compute the derivative of symbolicly (trying to compute its 30th derivative symbolicly on a popular math computation website times out). But autodiff.js computes its 100th derivative 27000 times per second.
+autodiff.js is way faster than symbolic differentiation for most equations. For example `x ^ (x ^ 2 + 1)` takes a really long time to compute the derivative of symbolicly (trying to compute its 30th derivative symbolicly on a popular math computation website times out). But autodiff.js computes its 100th derivative 27000 times per second.

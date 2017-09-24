@@ -8,9 +8,13 @@ import {
   add,
   multiply,
   divide,
-  sqrt,
+
+  negative,
+
   exp,
   log,
+
+  sqrt,
   pow,
 
   sin,
@@ -42,9 +46,17 @@ beforeEach(() => {
 })
 
 describe('series', () => {
-  it('add', () => {
-    setNumberOfDerivativesToCompute(3)
+  it('negative', () => {
+    // f(x) = - x at x = 2
+    const x = variableEvaluatedAtPoint(2)
+    expectDerivatives(negative(x), [- 2, - 1, 0, 0])
 
+    // f(x) = x + x at x = 2
+    const value = add(x, x)
+    expectDerivatives(value, [4, 2, 0, 0])
+  })
+
+  it('add', () => {
     // f(x) = x at x = 2
     let x = variableEvaluatedAtPoint(2)
     expectDerivatives(x, [2, 1, 0, 0])
@@ -52,7 +64,6 @@ describe('series', () => {
     // f(x) = x * 2 at x = 2
     let value = add(x, x)
     expectDerivatives(value, [4, 2, 0, 0])
-
   })
 
   it('multiply', () => {
@@ -129,77 +140,130 @@ describe('series', () => {
     ])
   })
 
-  it('exp', () => {
-    // At x = 2
-    //
-    // f(x)    = exp(x ^ 2)                   = Math.exp(4)
-    // f'(x)   = 2 x exp(x ^ 2)               = 4 * Math.exp(4)
-    // f''(x)  = 2 (2 x ^ 2 + 1) exp(x ^ 2)   = 18 * Math.exp(4)
-    // f'''(x) = 4 x exp(x ^ 2) (2 x ^ 2 + 3) = 88 * Math.exp(4)
-    let x = variableEvaluatedAtPoint(2)
-    let value = exp(multiply(x, x))
-    expectDerivatives(value, [
-      Math.exp(4),
-      4 * Math.exp(4),
-      18 * Math.exp(4),
-      88 * Math.exp(4),
-    ])
+  it('exp for x > 0, x = 0 and x < 0', () => {
+    for (let pt of [ 2, 0, -2 ]) {
+      // f(x)    = exp(x ^ 2)
+      // f'(x)   = 2 x exp(x ^ 2)
+      // f''(x)  = 2 (2 x ^ 2 + 1) exp(x ^ 2)
+      // f'''(x) = 4 x exp(x ^ 2) (2 x ^ 2 + 3)
+      const x = variableEvaluatedAtPoint(pt)
+      const value = exp(multiply(x, x))
+      expectDerivatives(value, [
+        Math.exp(pt * pt),
+        2 * pt * Math.exp(pt * pt),
+        2 * (2 * pt * pt + 1) * Math.exp(pt * pt),
+        4 * pt * Math.exp(pt * pt) * (2 * pt * pt + 3),
+      ])
+    }
   })
 
-  it('log', () => {
-    // At x = Math.E
-    //
+  it('log of x > 1, x < 1 and x < 0', () => {
     // f(x)   = log(x * x)   = 2
     // f'(x)  = 2 / x       = 2 / e
     // f''(x) = - 2 / x ^ 2 = - 2 / e ^ 2
     // f'''(x) = 4 / x ^ 3  = 4 / e ^ 3
-    let x = variableEvaluatedAtPoint(Math.E)
-    let value = log(multiply(x, x))
-    expectDerivatives(value, [
-      2,
-      2 / Math.E,
-      - 2 / Math.pow(Math.E, 2),
-      4 / Math.pow(Math.E, 3),
-    ])
+    for (let pt of [ Math.E, .5, -1 ]) {
+      const x = variableEvaluatedAtPoint(pt)
+      const value = log(multiply(x, x))
+      expectDerivatives(value, [
+        Math.log(pt * pt),
+        2 / pt,
+        - 2 / (pt * pt),
+        4 / (pt * pt * pt),
+      ])
+    }
   })
 
-  it('pow works with two series arguments', () => {
-    // At x = 2
-    //
+  // Test the following combinations of cases for pow(a, b)
+  // with a >= 0
+  //
+  //  a === 0, 0 < a < 1, and a > 1
+  //  positive and negative integer exponent
+  //  positive and negative fractional exponent
+  //
+  // Testing pow with negative base is done below because it
+  // takes a separate code path.
+  it('pow(a, b) where a >= 0', () => {
+    // f(x)    = x ^ b
+    // f'(x)   = b x ^ (b - 1)
+    // f''(x)  = b (b - 1) x ^ (b - 2)
+    // f'''(x) = b (b - 1) (b - 2) x ^ (b - 3)
+    for (let pt of [ 0, .5, 2 ]) {
+      for (let b of [ -2, -.5, 0, .5, 2 ]) {
+        const x = variableEvaluatedAtPoint(pt)
+        const value = pow(x, b)
+        expectDerivatives(value, [
+          pt ** b,
+          b * pt ** (b - 1),
+          b * (b - 1) * pt ** (b - 2),
+          b * (b - 1) * (b - 2) * pt ** (b - 3),
+        ])
+      }
+    }
+  })
+
+  // Test pow(a, b) with a < 0. We don't support negative bases
+  // to fractional powers -- we test this case to ensure we
+  // return NaNs instead of a misleadingly correct result.
+  it('pow(a, b) where a < 0', () => {
+    // f(x)    = x ^ b
+    // f'(x)   = b x ^ (b - 1)
+    // f''(x)  = b (b - 1) x ^ (b - 2)
+    // f'''(x) = b (b - 1) (b - 2) x ^ (b - 3)
+    for (let pt of [ -.5, -1 ]) {
+      for (let b of [ -2, -.5, 0, .5, 2 ]) {
+        const x = variableEvaluatedAtPoint(pt)
+        const value = pow(x, b)
+        expectDerivatives(value, [
+          pt ** b,
+          b * pt ** (b - 1),
+          b * (b - 1) * pt ** (b - 2),
+          b * (b - 1) * (b - 2) * pt ** (b - 3),
+        ])
+      }
+    }
+
+    // Check that taking the power of a negative value to a fractional
+    // exponent returns NaNs.
+    const pt = -1
+    const x = variableEvaluatedAtPoint(pt)
+    const value = pow(x, .5)
+    const coefficients = (value as any).coefficients
+    expect(coefficients[0]).toBeNaN()
+    expect(coefficients[1]).toBeNaN()
+    expect(coefficients[2]).toBe(0)
+    expect(coefficients[3]).toBe(0)
+  })
+
+  it('pow(a, b) where both a and b are series', () => {
     // f(x)    = x ^ x
     // f'(x)   = x ^ x (log(x) + 1)
     // f''(x)  = x ^ x (1 / x + (log(x) + 1) ^ 2)
-    // f'''(x) = TODO(ryan): fill this in
-    const pt = 2
+    // f'''(x) = x ^ (x - 2) * (
+    //             x ^ 2 +
+    //             x ^ 2 log(x) ^ 3 +
+    //             3 x ^ 2 log(x) ^ 2 +
+    //             3 x +
+    //             3 x (x + 1) log(x) -
+    //             1
+    //           )
+    const pt = -3
     const x = variableEvaluatedAtPoint(pt)
     const value = pow(x, x)
     expectDerivatives(value, [
       Math.pow(pt, pt),
       Math.pow(pt, pt) * (Math.log(pt) + 1),
       Math.pow(pt, pt) * (1 / pt + Math.pow(Math.log(pt) + 1, 2)),
-      28.574184025053153,
+      Math.pow(pt, pt - 2) * (
+        pt * pt +
+        pt * pt * Math.log(pt) ** 3 +
+        3 * pt * pt * Math.log(pt) ** 2 +
+        3 * pt +
+        3 * pt * (pt + 1) * Math.log(pt) -
+        1
+      ),
     ])
   })
-
-  // TODO(ryan): make this function work!
-  //
-  // it('pow works with negative powers', () => {
-  //   // At x = 2
-  //   //
-  //   // f(x)    = x ^ - 2 = 1 / 4
-  //   // f'(x)   = - 2 x  = - 4
-  //   // f''(x)  = - 2    = - 2
-  //   // f'''(x) = 0      = 0
-  //   const pt = 2
-  //   const x = variableEvaluatedAtPoint(pt)
-  //   const value = pow(x, -2)
-  //   expectDerivatives(value, [
-  //     Math.pow(pt, -2),
-  //     - 2 * pt,
-  //     - 2,
-  //     0,
-  //   ])
-  // })
 
   it('sin', () => {
     // At x = 2
