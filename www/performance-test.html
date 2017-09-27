@@ -16,30 +16,58 @@
 </head>
 <body>
   <div class="page-content">
-    autodiff.js computed the 100th derivative of x<sup>x<sup>2</sup> + 1</sup> <span id="label-ms">...</span> times in a second.
+    autodiff.js computes the 100th derivative of x<sup>x<sup>2</sup> + 1</sup> <span id="label-eval-ms">...</span> times in a second.
+
+    <br />
+    <br />
+    (and it compiles the corresponding autodiff function <span id="label-compile-ms">...</span> times in a second)
   </div>
 </body>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  const label = document.getElementById('label-ms');
+  const labelEval = document.getElementById('label-eval-ms');
+  const labelCompile = document.getElementById('label-compile-ms');
 
   // Calculate the 1..10th derivatives of whatever function we get.
   autodiff.setNumberOfDerivativesToCompute(100);
 
+  const compileFunction = (n) => {
+    let res = null
+    for (let i = 0; i < n; i++) {
+      res = autodiff.compileExpression('x ^ (x x + 1)')
+    }
+    return res
+  }
+
+  const f = autodiff.compileExpression('x ^ (x x + 1)')
+  const evalFunction = (n) => {
+    let res = null
+    for (let i = 0; i < n; i++) {
+      res = autodiff.toValueAndDerivatives(f(1))
+    }
+    return res
+  }
+
+  const measureDuration = (callback) => {
+    const startMs = window.performance.now()
+    callback()
+    const endMs = window.performance.now()
+    return endMs - startMs
+  }
+
   // Every two seconds, compute an expensive derivative 1000 times
   // and note how long it took.
   setInterval(function () {
-    const start = performance.now();
+    const compileMs = measureDuration(() => {
+      compileFunction(1000)
+    })
 
-    for (let i = 0; i < 1000; i++) {
-      const x = autodiff.variableEvaluatedAtPoint(.5);
-      const xSquared = autodiff.multiply(x, x);
-      const f = autodiff.pow(x, autodiff.add(xSquared, 1));
-      const result = autodiff.toValueAndDerivatives(f);
-    }
-    const end = performance.now();
-    const totalMs = end - start;
-    label.innerText = '' + 1000 * (1000 / totalMs | 0);
+    const evalMs = measureDuration(() => {
+      evalFunction(1000)
+    })
+
+    labelEval.innerText = '' + 1000 * (1000 / evalMs | 0);
+    labelCompile.innerText = '' + 1000 * (1000 / compileMs | 0);
   }, 2000);
 });
 </script>

@@ -1,7 +1,7 @@
+import { ISeries } from '../autodiff'
 import {
   setNumberOfDerivativesToCompute,
   variableEvaluatedAtPoint,
-  ISeries,
   SeriesOrNumber,
   toValueAndDerivatives,
 
@@ -24,7 +24,7 @@ import {
   asin,
   acos,
   atan,
-} from '../src/autodiff'
+} from './series'
 
 function expectDerivatives(series: SeriesOrNumber, expected: number[]) {
   const derivatives = toValueAndDerivatives(series as ISeries)
@@ -202,29 +202,8 @@ describe('series', () => {
     }
   })
 
-  // Test pow(a, b) with a < 0. We don't support negative bases
-  // to fractional powers -- we test this case to ensure we
-  // return NaNs instead of a misleadingly correct result.
   it('pow(a, b) where a < 0', () => {
-    // f(x)    = x ^ b
-    // f'(x)   = b x ^ (b - 1)
-    // f''(x)  = b (b - 1) x ^ (b - 2)
-    // f'''(x) = b (b - 1) (b - 2) x ^ (b - 3)
-    for (let pt of [ -.5, -1 ]) {
-      for (let b of [ -2, -.5, 0, .5, 2 ]) {
-        const x = variableEvaluatedAtPoint(pt)
-        const value = pow(x, b)
-        expectDerivatives(value, [
-          pt ** b,
-          b * pt ** (b - 1),
-          b * (b - 1) * pt ** (b - 2),
-          b * (b - 1) * (b - 2) * pt ** (b - 3),
-        ])
-      }
-    }
-
-    // Check that taking the power of a negative value to a fractional
-    // exponent returns NaNs.
+    // Check that taking the power of a negative base returns NaNs.
     const pt = -1
     const x = variableEvaluatedAtPoint(pt)
     const value = pow(x, .5)

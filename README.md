@@ -11,23 +11,19 @@ In the below example, we compute the first 10 derivatives of the function x ^ (x
 ```ts
 import * as autodiff from 'autodiff'
 
-// Tell autodiff to compute 10 derivatives for all future
-// computations. The default is 2.
-autodiff.setNumberOfDerivativesToCompute(10)
+autodiff.setNumDerivativesToCompute(100)
 
-// Create a variable x
-const x = autodiff.variableEvaluatedAtPoint(Math.PI)
+// In Chrome on OSX, compileExpression is fast enough to be called
+// > 10k times per second for most simple math equations
+const mathFunc = autodiff.compileExpression('x * 3 + x ^ 2 / (x + 1)')
 
-// Construct the function f(x) = x ^ (x + 1) out of the variable
-// x and various autodiff helpers
-const f = autodiff.pow(
-  x,
-  autodiff.add(x, 1)
-)
-
-// result is an array whose first value is f(PI), whose second
-// value is f'(PI), third value is f''(PI) and so on...
-const result = autodiff.toValueAndDerivatives(expression)
+// In Chrome on OSX, mathFunc is fast enough to be called > 20k times
+// per second for most simple math expressions and numDerivativesToCompute = 100
+const result = mathFunc(3)
+const valueAtThree = result[0]
+const firstDerivativeAtThree = result[1]
+const secondDerivativeAtThree = result[2]
+// etc...
 ```
 
 The following mathematical functions are supported...
@@ -41,7 +37,7 @@ divide(a, b)
 exp(a)
 log(a)
 
-pow(a, b)
+pow(a, b) // for a > 0
 sqrt(a)
 
 sin(a)
