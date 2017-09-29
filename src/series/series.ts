@@ -10,21 +10,92 @@
 // in this file is based on this paper. If a comment mentions, 'equation
 // x.y in the paper', it means *this* paper :-)
 
-import * as list from './list'
 import { factorial } from './factorial'
 import { ISeries } from '../autodiff'
 
-export function variableEvaluatedAtPoint(value: number): ISeries {
-  return Series.create(value, 1)
+// We cache instances of Series to avoid unnecessary allocations during
+// computation. This sounds like not a big deal, but is pretty easy to
+// do and has a measurable impact on the performance test, espectially
+// when computing many derivatives.
+//
+// Without this caching, the performance test runs at ~25k autodiff
+// function evaluations per second. With it, it grows to ~31k.
+export module SeriesPool {
+  const _free: Series[] = []
+  let _trackedAllocations: Series[] = null
+
+  // Use this to capture all allocated series in the process of a computation
+  // and to free them all afterward.
+  export function trackAndReleaseAllocations(callback: () => void) {
+    // Set _capturedAllocations to an empty array indicating that
+    // we want to start tracking all allocated series so that they
+    // can be freed at the end of a computation.
+    _trackedAllocations = []
+
+    // Perform the computation.
+    callback()
+
+    // Free all necessary allocations.
+    for (let i = 0; i < _trackedAllocations.length; i++) {
+      if (!_trackedAllocations[i].isFree) {
+        markFree(_trackedAllocations[i])
+      }
+    }
+
+    // Stop tracking allocations
+    _trackedAllocations = null
+  }
+
+  export function allocate(): Series {
+    let res: Series = null
+
+    if (_free.length > 0) {
+      // There are free series. Pop one and clear its memory.
+      res = _free.pop()
+      for (let i = 0; i < res.coefficients.length; i++) {
+        res.coefficients[i] = 0;
+      }
+    } else {
+      // Otherwise allocate a new one.
+      res = new Series()
+    }
+
+    // If we're currently tracking allocations, save this one so that
+    // it can be freed and re-used later.
+    if (_trackedAllocations) {
+      _trackedAllocations.push(res)
+    }
+
+    res.isFree = false
+    return res
+  }
+
+  export function allocateCopy(s: Series): Series {
+    const copy = allocate()
+    for (let i = 0; i < s.coefficients.length; i++) {
+      copy.coefficients[i] = s.coefficients[i]
+    }
+    copy.isFree = false
+    return copy
+  }
+
+  export function markFree(series: Series) {
+    series.isFree = true
+    _free.push(series)
+  }
 }
 
-export function constantValue(value: number): ISeries {
-  return Series.create(value, 0)
+export function variableEvaluatedAtPoint(value: number): Series {
+  const series = SeriesPool.allocate()
+  series.coefficients[0] = value
+  series.coefficients[1] = 1
+  return series
 }
 
-enum CopyBehavior {
-  COPY,
-  MOVE,
+export function constantValue(value: number): Series {
+  const series = SeriesPool.allocate()
+  series.coefficients[0] = value
+  return series
 }
 
 // This holds the coefficients of a Taylor series. If we shorten the
@@ -34,33 +105,34 @@ enum CopyBehavior {
 // f(x) = c[0] + c[1] (x - a) + c[2] (x - a) ^ 2 + ...
 //
 // c[i] contains the ith derivative of f divided by factorial(i).
-class Series implements ISeries {
-  public coefficients: number[]
+export class Series implements ISeries {
+  public isFree = false
+  public coefficients: number[] = []
 
-  // The second argument determines whether we copy the co-efficients
-  // array when constructing the series object. The default is to copy
-  // it, for safety. We use .MOVE for performance reasons when this
-  // file creates Series objects internally.
-  constructor(coefficients: number[], copyBehavior = CopyBehavior.COPY) {
-    list.logErrorIfNaN(coefficients)
-
-    this.coefficients = (
-      copyBehavior === CopyBehavior.COPY ?
-      coefficients.slice() :
-      coefficients
-    )
-  }
-
-  static create(value: number, derivative: number) {
-    const coefficients = [ value, derivative ]
-    while (coefficients.length <= globalDegree) {
-      coefficients.push(0)
+  constructor() {
+    while (this.coefficients.length <= globalDegree) {
+      this.coefficients.push(0)
     }
-    return new Series(coefficients)
   }
 
-  static copy(series: Series): Series {
-    return new Series(series.coefficients)
+
+  static createWithValueAndDerivative(value: number, derivative: number) {
+    const series = SeriesPool.allocate()
+    series.coefficients[0] = value
+    series.coefficients[1] = derivative
+    return series
+  }
+
+  static copy(series: Series): ISeries {
+    const copy = SeriesPool.allocate()
+    for (let i = 0; i < series.coefficients.length; i++) {
+      copy.coefficients[i] = series.coefficients[i]
+    }
+    return copy
+  }
+
+  freeToPool() {
+    SeriesPool.markFree(this)
   }
 }
 
@@ -82,63 +154,75 @@ export function setNumberOfDerivativesToCompute(degree: number) {
 
 export type SeriesOrNumber = ISeries | number
 
-export function add(a: SeriesOrNumber, b: SeriesOrNumber): SeriesOrNumber {
+export function add(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   if (typeof a === 'number' && typeof b === 'number') {
-    return a + b
+    return constantValue(a + b)
   }
 
   else if (typeof a === 'number' && b instanceof Series) {
-    const copy = b.coefficients.slice()
-    copy[0] += a
-    return new Series(copy, CopyBehavior.MOVE)
+    const res = SeriesPool.allocateCopy(b)
+    res.coefficients[0] += a
+    return res
   }
 
   else if (typeof b === 'number' && a instanceof Series) {
-    const copy = a.coefficients.slice()
-    copy[0] += b
-    return new Series(copy, CopyBehavior.MOVE)
+    const res = SeriesPool.allocateCopy(a)
+    res.coefficients[0] += b
+    return res
   }
 
   else if (a instanceof Series && b instanceof Series) {
-    return new Series(list.add(a.coefficients, b.coefficients))
+    const res = SeriesPool.allocateCopy(a)
+    for (let i = 0; i < a.coefficients.length; i++) {
+      res.coefficients[i] += a.coefficients[i]
+    }
+    return res
   }
 
   throw new Error('Unhandled case in add')
 }
 
-export function negative(a: SeriesOrNumber): SeriesOrNumber {
+export function negative(a: SeriesOrNumber): Series {
   if (typeof a === 'number') {
-    return - a
+    return constantValue(- a)
   } else if (a instanceof Series) {
-    const copy = a.coefficients.slice()
-    for (let i = 0; i < copy.length; i++) {
-      copy[i] *= -1
+    const res = SeriesPool.allocateCopy(a)
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] *= -1
     }
-    return new Series(copy, CopyBehavior.MOVE)
+    return res
   }
 
   throw new Error('Unhandled case in negative')
 }
 
-export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): SeriesOrNumber {
+export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   if (typeof a === 'number' && typeof b === 'number') {
-    return a - b
+    return constantValue(a - b)
   }
 
   else if (typeof a === 'number' && b instanceof Series) {
-    const copy = list.negative(b.coefficients)
-    copy[0] += a
-    return new Series(copy, CopyBehavior.MOVE)
+    const res = SeriesPool.allocate()
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] = a - b.coefficients[i]
+    }
+    return res
   }
 
   else if (typeof b === 'number' && a instanceof Series) {
-    const copy = a.coefficients.slice()
-    copy[0] -= b
-    return new Series(copy, CopyBehavior.MOVE)
+    const res = SeriesPool.allocate()
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] = a.coefficients[i] - b
+    }
+    return res
   }
 
   else if (a instanceof Series && b instanceof Series) {
-    return new Series(list.subtract(a.coefficients, b.coefficients))
+    const res = SeriesPool.allocate()
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] = a.coefficients[i] - b.coefficients[i]
+    }
+    return res
   }
 
   throw new Error('Unhandled case in add')
@@ -162,33 +246,41 @@ export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): SeriesOrNumber {
 // This sum has a special name which is 'discrete convolution' and it
 // is denoted in the paper by [a_1, ..., a_k] [b_k, b_k-1, ..., b_0]'
 // (where the ' is a super-script T in the paper, short for 'transpose').
-export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): SeriesOrNumber {
+export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number' && typeof bInput === 'number') {
-    return aInput * bInput
+    return constantValue(aInput * bInput)
   }
 
   else if (typeof aInput === 'number' && bInput instanceof Series) {
-    return new Series(list.multiplyScalar(bInput.coefficients, aInput))
+    const res = SeriesPool.allocate()
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] = aInput * bInput.coefficients[i]
+    }
+    return res
   }
 
   else if (typeof bInput === 'number' && aInput instanceof Series) {
-    return new Series(list.multiplyScalar(aInput.coefficients, bInput))
+    const res = SeriesPool.allocate()
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] = aInput.coefficients[i] * bInput
+    }
+    return res
   }
 
   else if (aInput instanceof Series && bInput instanceof Series) {
     const a = aInput.coefficients
     const b = bInput.coefficients
-    const h: number[] = []
+    const h = SeriesPool.allocate()
 
     for (let k = 0; k < a.length; k++) {
       let convolution = 0;
       for (let i = 0; i < k + 1; i++) {
         convolution += a[i] * b[k - i]
       }
-      h.push(convolution)
+      h.coefficients[k] = convolution
     }
 
-    return new Series(h)
+    return h
   }
 
   throw new Error('Unhandled case in add')
@@ -207,80 +299,91 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
 // We can re-arrange to solve for h_k...
 //
 // h_k = (a_k - [h_1, ..., h_k-1] [b_k, b_k-1, ..., b_1]') / b_0
-export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): SeriesOrNumber {
+export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number' && typeof bInput === 'number') {
-    return aInput / bInput
+    return constantValue(aInput / bInput)
   }
 
   else if (typeof aInput === 'number' && bInput instanceof Series) {
-    return new Series(list.divideScalar(bInput.coefficients, aInput))
+    const res = SeriesPool.allocate()
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] = aInput / bInput.coefficients[i]
+    }
+    return res
   }
 
   else if (typeof bInput === 'number' && aInput instanceof Series) {
-    return new Series(list.divideScalar(aInput.coefficients, bInput))
+    const res = SeriesPool.allocate()
+    for (let i = 0; i < res.coefficients.length; i++) {
+      res.coefficients[i] = aInput.coefficients[i] / bInput
+    }
+    return res
   }
 
   else if (aInput instanceof Series && bInput instanceof Series) {
     const a = aInput.coefficients
     const b = bInput.coefficients
-    const h = [ a[0] / b[0] ]
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = a[0] / b[0]
 
     for (let k = 1; k < a.length; k++) {
       let convolution = 0
       for (let i = 0; i < k; i++) {
-        convolution += h[i] * b[k - i]
+        convolution += h.coefficients[i] * b[k - i]
       }
-      h.push((a[k] - convolution) / b[0])
+      h.coefficients[k] = (a[k] - convolution) / b[0]
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    return h
   }
 
   throw new Error('Unhandled case in divide')
 }
 
-export function sqrt(aInput: SeriesOrNumber): SeriesOrNumber {
+export function sqrt(aInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number') {
-    return Math.sqrt(aInput)
+    return constantValue(Math.sqrt(aInput))
   }
 
   else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const h = [ Math.sqrt(a[0]) ]
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = Math.sqrt(a[0])
 
     for (let k = 1; k < a.length; k++) {
       const ak = a[k]
       let convolution = 0
       for (let i = 1; i < k; i++) {
-        convolution += h[i] * h[k - i]
+        convolution += h.coefficients[i] * h.coefficients[k - i]
       }
-      h.push((ak - convolution) / (2 * h[0]))
+      h.coefficients[k] = (ak - convolution) / (2 * h.coefficients[0])
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    return h
   }
 
   throw new Error('Unhandled case in divide')
 }
 
-export function exp(aInput: SeriesOrNumber): SeriesOrNumber {
+export function exp(aInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number') {
-    return Math.exp(aInput)
+    return constantValue(Math.exp(aInput))
   }
 
   else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const h = [ Math.exp(a[0]) ]
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = Math.exp(a[0])
 
     for (let k = 1; k < a.length; k++) {
       let convolution = 0
       for (let i = 1; i < k + 1; i++) {
-        convolution += i * a[i] * h[k - i]
+        convolution += i * a[i] * h.coefficients[k - i]
       }
-      h.push(convolution / k)
+      h.coefficients[k] = convolution / k
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    return h
   }
 
   throw new Error('Unhandled case in divide')
@@ -289,13 +392,13 @@ export function exp(aInput: SeriesOrNumber): SeriesOrNumber {
 // This computes the natural logarithm of a. It's named log to match the
 // Math.log function in Javascript, even though it'd be more appropriately
 // named ln.
-export function log(aInput: SeriesOrNumber): SeriesOrNumber {
+export function log(aInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number') {
     if (aInput < 0) {
       throw new Error(`log called with a negative number`)
     }
 
-    return Math.log(aInput)
+    return constantValue(Math.log(aInput))
   }
 
   else if (aInput instanceof Series) {
@@ -304,17 +407,18 @@ export function log(aInput: SeriesOrNumber): SeriesOrNumber {
     }
 
     const a = aInput.coefficients
-    const h = [ Math.log(a[0]) ]
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = Math.log(a[0])
 
     for (let k = 1; k < a.length; k++) {
       let convolution = 0
       for (let i = 1; i < k; i++) {
-        convolution += i * h[i] * a[k - i]
+        convolution += i * h.coefficients[i] * a[k - i]
       }
-      h.push((1 / a[0]) * (a[k] - convolution / k))
+      h.coefficients[k] = (1 / a[0]) * (a[k] - convolution / k)
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    return h
   }
 
   throw new Error('Unhandled case in divide')
@@ -333,9 +437,13 @@ function isNegative(a: SeriesOrNumber): boolean {
 // powers of negative bases. See slightly more info here:
 //
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/pow
-export function pow(a: SeriesOrNumber, b: SeriesOrNumber): SeriesOrNumber {
+export function pow(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   if (isNegative(a)) {
-    return Series.create(NaN, NaN)
+    const series = SeriesPool.allocate()
+    for (let i = 0; i < series.coefficients.length; i++) {
+      series.coefficients[i] = NaN
+    }
+    return series
   }
 
   // If we got here, then a is positive. We still need to handle the
@@ -344,44 +452,54 @@ export function pow(a: SeriesOrNumber, b: SeriesOrNumber): SeriesOrNumber {
 }
 
 // Returns a list of two SeriesOrNumber objects.
-function sinAndCos(aInput: SeriesOrNumber): SeriesOrNumber[] {
+function sinAndCos(aInput: SeriesOrNumber): Series[] {
   if (typeof aInput === 'number') {
-    return [ Math.sin(aInput), Math.cos(aInput) ]
+    return [
+      constantValue(Math.sin(aInput)),
+      constantValue(Math.cos(aInput)),
+    ]
 
   } else if (aInput instanceof Series) {
     const a = aInput.coefficients
 
-    let sinResult: number[] = [ Math.sin(a[0]) ]
-    let cosResult: number[] = [ Math.cos(a[0]) ]
+    const sinResult = SeriesPool.allocate()
+    sinResult.coefficients[0] = Math.sin(a[0])
+
+    const cosResult = SeriesPool.allocate()
+    cosResult.coefficients[0] = Math.cos(a[0])
 
     for (let k = 1; k < a.length; k++) {
       let sinConvolution = 0
       let cosConvolution = 0
 
       for (let i = 1; i < k + 1; i++) {
-        sinConvolution += i * a[i] * cosResult[k - i]
-        cosConvolution += i * a[i] * sinResult[k - i]
+        sinConvolution += i * a[i] * cosResult.coefficients[k - i]
+        cosConvolution += i * a[i] * sinResult.coefficients[k - i]
       }
 
-      sinResult.push(sinConvolution / k)
-      cosResult.push(- cosConvolution / k)
+      sinResult.coefficients[k] = sinConvolution / k
+      cosResult.coefficients[k] = - cosConvolution / k
     }
 
     return [
-      new Series(sinResult, CopyBehavior.MOVE),
-      new Series(cosResult, CopyBehavior.MOVE),
+      sinResult,
+      cosResult,
     ]
   }
 
   throw new Error('Unhandled case in divide')
 }
 
-export function sin(a: SeriesOrNumber): SeriesOrNumber {
-  return sinAndCos(a)[0]
+export function sin(a: SeriesOrNumber): Series {
+  const res = sinAndCos(a)
+  res[1].freeToPool()
+  return res[0]
 }
 
-export function cos(a: SeriesOrNumber): SeriesOrNumber {
-  return sinAndCos(a)[1]
+export function cos(a: SeriesOrNumber): Series {
+  const res = sinAndCos(a)
+  res[0].freeToPool()
+  return res[1]
 }
 
 // We could implement this by calling `divide(sin(a), cos(a))`. But that
@@ -403,32 +521,36 @@ export function cos(a: SeriesOrNumber): SeriesOrNumber {
 //
 // We compute two series in parallel: h_k for tan(x) and b_k for
 // (1 / cos(x) ^ 2). We return only the former.
-export function tan(aInput: SeriesOrNumber): SeriesOrNumber {
+export function tan(aInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number') {
-    return Math.tan(aInput)
+    return constantValue(Math.tan(aInput))
 
   } else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const b = [ 1 / (Math.cos(a[0]) * Math.cos(a[0])) ]
-    const h = [ Math.tan(a[0]) ]
+    const b = SeriesPool.allocate()
+    b.coefficients[0] = 1 / (Math.cos(a[0]) * Math.cos(a[0]))
+
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = Math.tan(a[0])
 
     for (let k = 1; k < a.length; k++) {
       // convolve over i..k
       let hConvolution = 0
       for (let i = 1; i < k + 1; i++) {
-        hConvolution += i * a[i] * b[k - i]
+        hConvolution += i * a[i] * b.coefficients[k - i]
       }
-      h.push(hConvolution / k)
+      h.coefficients[k] = hConvolution / k
 
       // convolve over i..k
       let bConvolution = 0
       for (let i = 1; i < k + 1; i++) {
-        bConvolution += i * h[i] * h[k - i]
+        bConvolution += i * h.coefficients[i] * h.coefficients[k - i]
       }
-      b.push(2 * bConvolution / k)
+      b.coefficients[k] = 2 * bConvolution / k
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    b.freeToPool()
+    return h
   }
 
   throw new Error('Unhandled case in divide')
@@ -464,13 +586,13 @@ export function tan(aInput: SeriesOrNumber): SeriesOrNumber {
 // sqrt(1 - x ^ 2)''  at x = .5 is - 1.53
 // sqrt(1 - x ^ 2)''' at x = .5 is - 3.07
 //
-export function asin(aInput: SeriesOrNumber): SeriesOrNumber {
+export function asin(aInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number') {
     if (Math.abs(aInput) >= 1) {
       console.warn(`asin called with value ${aInput}`)
     }
 
-    return Math.asin(aInput)
+    return constantValue(Math.asin(aInput))
 
   } else if (aInput instanceof Series) {
     if (Math.abs(aInput.coefficients[0]) >= 1) {
@@ -478,26 +600,30 @@ export function asin(aInput: SeriesOrNumber): SeriesOrNumber {
     }
 
     const a = aInput.coefficients
-    const b = [ Math.sqrt(1 - a[0] * a[0]) ]
-    const h = [ Math.asin(a[0]) ]
+    const b = SeriesPool.allocate()
+    b.coefficients[0] = Math.sqrt(1 - a[0] * a[0])
+
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = Math.asin(a[0])
 
     for (let k = 1; k < a.length; k++) {
       // sum from i = 1..k-1
       let hConvolution = 0
       for (let i = 1; i < k; i++) {
-        hConvolution += i * h[i] * b[k - i]
+        hConvolution += i * h.coefficients[i] * b.coefficients[k - i]
       }
-      h.push((a[k] - hConvolution / k) / b[0])
+      h.coefficients[k] = (a[k] - hConvolution / k) / b.coefficients[0]
 
       // sum from i = 1..k
       let bConvolution = 0
       for (let i = 1; i < k + 1; i++) {
-        bConvolution += i * h[i] * a[k - i]
+        bConvolution += i * h.coefficients[i] * a[k - i]
       }
-      b.push(- bConvolution / k)
+      b.coefficients[k] = - bConvolution / k
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    b.freeToPool()
+    return h
   }
 
   throw new Error('Unhandled case in asin')
@@ -513,13 +639,13 @@ export function asin(aInput: SeriesOrNumber): SeriesOrNumber {
 //
 //  a'(x) = - h'(x) b(x)
 //  b'(x) = h'(x) a(x)
-export function acos(aInput: SeriesOrNumber): SeriesOrNumber {
+export function acos(aInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number') {
     if (Math.abs(aInput) >= 1) {
       console.warn(`asin called with value ${aInput}`)
     }
 
-    return Math.acos(aInput)
+    return constantValue(Math.acos(aInput))
 
   } else if (aInput instanceof Series) {
     if (Math.abs(aInput.coefficients[0]) >= 1) {
@@ -527,26 +653,31 @@ export function acos(aInput: SeriesOrNumber): SeriesOrNumber {
     }
 
     const a = aInput.coefficients
-    const b = [ Math.sqrt(1 - a[0] * a[0]) ]
-    const h = [ Math.acos(a[0]) ]
+
+    const b = SeriesPool.allocate()
+    b.coefficients[0] = Math.sqrt(1 - a[0] * a[0])
+
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = Math.acos(a[0])
 
     for (let k = 1; k < a.length; k++) {
       // sum from i = 1..k-1
       let hConvolution = 0
       for (let i = 1; i < k; i++) {
-        hConvolution += i * h[i] * b[k - i]
+        hConvolution += i * h.coefficients[i] * b.coefficients[k - i]
       }
-      h.push((a[k] + hConvolution / k) / - b[0])
+      h.coefficients[k] = ((a[k] + hConvolution / k) / - b.coefficients[0])
 
       // sum from i = 1..k
       let bConvolution = 0
       for (let i = 1; i < k + 1; i++) {
-        bConvolution += i * h[i] * a[k - i]
+        bConvolution += i * h.coefficients[i] * a[k - i]
       }
-      b.push(bConvolution / k)
+      b.coefficients[k] = bConvolution / k
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    b.freeToPool()
+    return h
   }
 
   throw new Error('Unhandled case in asin')
@@ -575,33 +706,38 @@ export function acos(aInput: SeriesOrNumber): SeriesOrNumber {
 //  h_k b_0 = a_k - (1 / k) [1 h_1, ..., k-1 h_k-1] [b_k-1, ..., b_1]'
 //  h_k = (a_k - (1 / k) [1 h_1, ..., k-1 h_k-1] [b_k-1, ..., b_1]') / b_0
 //
-export function atan(aInput: SeriesOrNumber): SeriesOrNumber {
+export function atan(aInput: SeriesOrNumber): Series {
   if (typeof aInput === 'number') {
-    return Math.atan(aInput)
+    return constantValue(Math.atan(aInput))
 
   } else if (aInput instanceof Series) {
 
     const a = aInput.coefficients
-    const b = [ 1 + a[0] * a[0] ]
-    const h = [ Math.atan(a[0]) ]
+
+    const b = SeriesPool.allocate()
+    b.coefficients[0] = 1 + a[0] * a[0]
+
+    const h = SeriesPool.allocate()
+    h.coefficients[0] = Math.atan(a[0])
 
     for (let k = 1; k < a.length; k++) {
       // sum from i = 1..k-1
       let hConvolution = 0
       for (let i = 1; i < k; i++) {
-        hConvolution += i * h[i] * b[k - i]
+        hConvolution += i * h.coefficients[i] * b.coefficients[k - i]
       }
-      h.push((a[k] - hConvolution / k) / b[0])
+      h.coefficients[k] = (a[k] - hConvolution / k) / b.coefficients[0]
 
       // sum from i = 1..k
       let bConvolution = 0
       for (let i = 1; i < k + 1; i++) {
         bConvolution += i * a[i] * a[k - i]
       }
-      b.push(2 * bConvolution / k)
+      b.coefficients[k] = 2 * bConvolution / k
     }
 
-    return new Series(h, CopyBehavior.MOVE)
+    b.freeToPool()
+    return h
   }
 
   throw new Error('Unhandled case in atan')

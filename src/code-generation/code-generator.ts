@@ -1,6 +1,7 @@
 import { Node, NodeType } from '../parser/expression-parser'
 import { AutodiffFunction } from '../autodiff'
 import {
+  SeriesPool,
   toValueAndDerivatives,
   variableEvaluatedAtPoint,
   add,
@@ -121,6 +122,10 @@ export function buildAutodiffFunctionForExpression(expression: Node): AutodiffFu
   // The second argument is the SeriesAPI object
   const wrappedFunc = new Function("x", "s", `return s.${getFunctionName(toValueAndDerivatives)}(${src})`)
   return (x: number) => {
-    return wrappedFunc(x, seriesAPI)
+    let res: number[] = null
+    SeriesPool.trackAndReleaseAllocations(() => {
+      res = wrappedFunc(x, seriesAPI)
+    })
+    return res
   }
 }

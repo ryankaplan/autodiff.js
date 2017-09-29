@@ -210,8 +210,8 @@ describe('series', () => {
     const coefficients = (value as any).coefficients
     expect(coefficients[0]).toBeNaN()
     expect(coefficients[1]).toBeNaN()
-    expect(coefficients[2]).toBe(0)
-    expect(coefficients[3]).toBe(0)
+    expect(coefficients[2]).toBeNaN()
+    expect(coefficients[3]).toBeNaN()
   })
 
   it('pow(a, b) where both a and b are series', () => {
