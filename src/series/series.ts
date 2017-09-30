@@ -12,78 +12,25 @@
 
 import { factorial } from './factorial'
 import { ISeries } from '../autodiff'
+import { Pool } from './pool'
 
-// We cache instances of Series to avoid unnecessary allocations during
-// computation. This sounds like not a big deal, but is pretty easy to
-// do and has a measurable impact on the performance test, espectially
-// when computing many derivatives.
-//
-// Without this caching, the performance test runs at ~25k autodiff
-// function evaluations per second. With it, it grows to ~31k.
-export module SeriesPool {
-  const _free: Series[] = []
-  let _trackedAllocations: Series[] = null
+function newSeries(): Series {
+  return new Series()
+}
 
-  // Use this to capture all allocated series in the process of a computation
-  // and to free them all afterward.
-  export function trackAndReleaseAllocations(callback: () => void) {
-    // Set _capturedAllocations to an empty array indicating that
-    // we want to start tracking all allocated series so that they
-    // can be freed at the end of a computation.
-    _trackedAllocations = []
-
-    // Perform the computation.
-    callback()
-
-    // Free all necessary allocations.
-    for (let i = 0; i < _trackedAllocations.length; i++) {
-      if (!_trackedAllocations[i].isFree) {
-        markFree(_trackedAllocations[i])
-      }
-    }
-
-    // Stop tracking allocations
-    _trackedAllocations = null
-  }
-
-  export function allocate(): Series {
-    let res: Series = null
-
-    if (_free.length > 0) {
-      // There are free series. Pop one and clear its memory.
-      res = _free.pop()
-      for (let i = 0; i < res.coefficients.length; i++) {
-        res.coefficients[i] = 0;
-      }
-    } else {
-      // Otherwise allocate a new one.
-      res = new Series()
-    }
-
-    // If we're currently tracking allocations, save this one so that
-    // it can be freed and re-used later.
-    if (_trackedAllocations) {
-      _trackedAllocations.push(res)
-    }
-
-    res.isFree = false
-    return res
-  }
-
-  export function allocateCopy(s: Series): Series {
-    const copy = allocate()
-    for (let i = 0; i < s.coefficients.length; i++) {
-      copy.coefficients[i] = s.coefficients[i]
-    }
-    copy.isFree = false
-    return copy
-  }
-
-  export function markFree(series: Series) {
-    series.isFree = true
-    _free.push(series)
+function clearSeries(s: Series) {
+  for (let i = 0; i < s.coefficients.length; i++) {
+    s.coefficients[i] = 0
   }
 }
+
+function copySeries(to: Series, from: Series) {
+  for (let i = 0; i < to.coefficients.length; i++) {
+    to.coefficients[i] = from.coefficients[i]
+  }
+}
+
+export const SeriesPool = new Pool<Series>(newSeries, clearSeries, copySeries)
 
 export function variableEvaluatedAtPoint(value: number): Series {
   const series = SeriesPool.allocate()
