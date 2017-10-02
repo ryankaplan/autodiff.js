@@ -1,6 +1,6 @@
 {
   "name": "autodiff",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "A Javascript library for performing automatic differentiation",
   "repository": {
     "type": "git",
