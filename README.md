@@ -13,17 +13,16 @@ import * as autodiff from 'autodiff'
 
 autodiff.setNumDerivativesToCompute(100)
 
-// In Chrome on OSX, compileExpression is fast enough to be called
-// > 10k times per second for most simple math equations
-const mathFunc = autodiff.compileExpression('x * 3 + x ^ 2 / (x + 1)')
+const f = autodiff.compileFunction('x', 'x * 3 + x ^ 2 / (x + 1)')
 
-// In Chrome on OSX, mathFunc is fast enough to be called > 20k times
-// per second for most simple math expressions and numDerivativesToCompute = 100
-const result = mathFunc(3)
+// Evaluate the function f at x = 3
+const result = f(3)
+
+// Access f(3), f'(3), f''(3), etc.
 const valueAtThree = result[0]
 const firstDerivativeAtThree = result[1]
 const secondDerivativeAtThree = result[2]
-// etc...
+...
 ```
 
 The following mathematical functions are supported...
