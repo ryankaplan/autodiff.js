@@ -9,6 +9,7 @@
 
 import { factorial } from './factorial'
 import { Pool } from './pool'
+import { numDerivativesToCompute } from './global-settings'
 
 function newSeries(): Series2D {
   return new Series2D()
@@ -66,6 +67,7 @@ export class Series2D {
   public size: number = -1
 
   constructor() {
+    const globalDegree = numDerivativesToCompute()
     this.size = globalDegree + 1
     for (let y = 0; y <= globalDegree; y++) {
       for (let x = 0; x <= globalDegree; x++) {
@@ -109,11 +111,6 @@ export function toValueAndDerivatives(s: Series2D): number[] {
   }
 
   return derivatives
-}
-
-let globalDegree = 2
-export function setNumberOfDerivativesToCompute(degree: number) {
-  globalDegree = degree
 }
 
 // Functions on series objects

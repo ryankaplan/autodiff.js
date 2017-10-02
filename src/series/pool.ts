@@ -75,4 +75,8 @@ export class Pool<T extends Freeable> {
     series.isFree = true
     this._free.push(series)
   }
+
+  public forgetFreeElements() {
+    this._free = []
+  }
 }

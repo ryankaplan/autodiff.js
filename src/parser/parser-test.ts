@@ -25,6 +25,13 @@ describe('expression parser', () => {
     checkParse(`- + - x`, `[- [+ [- [x]]]]`)
   })
 
+  // (x y) ^ (x y * sin(x - 3) / 3)
+  it('should handle function calls', () => {
+    checkParse(`sin(x)`, `[[sin]([x])]`)
+    checkParse(`sin(x - 3)`, `[[sin]([[x] - [3]])]`)
+    checkParse(`y * sin(x - 3)`, `[[y] * [[sin]([[x] - [3]])]]`)
+  })
+
   it('should treat math operations with appropriate precedence', () => {
     // * and / have higher precedence than + or -
     checkParse(`a + b * c`, `[[a] + [[b] * [c]]]`)

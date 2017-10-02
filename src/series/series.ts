@@ -12,6 +12,7 @@
 
 import { factorial } from './factorial'
 import { Pool } from './pool'
+import { numDerivativesToCompute } from './global-settings'
 
 function newSeries(): Series {
   return new Series()
@@ -56,7 +57,7 @@ export class Series {
   public coefficients: number[] = []
 
   constructor() {
-    while (this.coefficients.length <= globalDegree) {
+    while (this.coefficients.length <= numDerivativesToCompute() + 1) {
       this.coefficients.push(0)
     }
   }
@@ -72,11 +73,6 @@ export function toValueAndDerivatives(s: Series) {
     derivatives.push(s.coefficients[i] * factorial(i))
   }
   return derivatives
-}
-
-let globalDegree = 2
-export function setNumberOfDerivativesToCompute(degree: number) {
-  globalDegree = degree
 }
 
 // Functions on series objects

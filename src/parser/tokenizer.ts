@@ -1,4 +1,5 @@
 import { ParserError, ErrorMsg } from './error'
+import { supportedFunctions } from '../code-generation/code-generator'
 
 export enum TokenType {
   NONE,
@@ -43,7 +44,16 @@ function startsExpression(token: Token) {
 
 function endsExpression(token: Token) {
   const type = token.type
+
+  // Hack: we specifically don't insert multiplications between tokens like
+  // 'sin' and '(x)' which should be function calls
+  const isSpecialFunction = (
+    token.type === TokenType.IDENTIFIER &&
+    supportedFunctions.indexOf(token.value) !== -1
+  )
+
   return (
+    !isSpecialFunction &&
     type === TokenType.IDENTIFIER ||
     type === TokenType.INT_LITERAL ||
     type === TokenType.FLOAT_LITERAL ||

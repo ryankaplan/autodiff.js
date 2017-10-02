@@ -1,5 +1,7 @@
+import { setNumberOfDerivativesToCompute } from './global-settings'
+
 import {
-  setNumberOfDerivativesToCompute,
+  series2DPool,
   xEvaluatedAtPoint,
   yEvaluatedAtPoint,
   constantValue,
@@ -46,6 +48,7 @@ function expectDerivatives(series: Series2D, expected: number[]) {
 }
 
 beforeEach(() => {
+  series2DPool.forgetFreeElements()
   setNumberOfDerivativesToCompute(2)
 })
 
