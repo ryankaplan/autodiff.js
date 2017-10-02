@@ -11,7 +11,6 @@
 // x.y in the paper', it means *this* paper :-)
 
 import { factorial } from './factorial'
-import { ISeries } from '../autodiff'
 import { Pool } from './pool'
 
 function newSeries(): Series {
@@ -30,17 +29,17 @@ function copySeries(to: Series, from: Series) {
   }
 }
 
-export const SeriesPool = new Pool<Series>(newSeries, clearSeries, copySeries)
+export const seriesPool = new Pool<Series>(newSeries, clearSeries, copySeries)
 
 export function variableEvaluatedAtPoint(value: number): Series {
-  const series = SeriesPool.allocate()
+  const series = seriesPool.allocate()
   series.coefficients[0] = value
   series.coefficients[1] = 1
   return series
 }
 
 export function constantValue(value: number): Series {
-  const series = SeriesPool.allocate()
+  const series = seriesPool.allocate()
   series.coefficients[0] = value
   return series
 }
@@ -52,7 +51,7 @@ export function constantValue(value: number): Series {
 // f(x) = c[0] + c[1] (x - a) + c[2] (x - a) ^ 2 + ...
 //
 // c[i] contains the ith derivative of f divided by factorial(i).
-export class Series implements ISeries {
+export class Series {
   public isFree = false
   public coefficients: number[] = []
 
@@ -62,28 +61,12 @@ export class Series implements ISeries {
     }
   }
 
-
-  static createWithValueAndDerivative(value: number, derivative: number) {
-    const series = SeriesPool.allocate()
-    series.coefficients[0] = value
-    series.coefficients[1] = derivative
-    return series
-  }
-
-  static copy(series: Series): ISeries {
-    const copy = SeriesPool.allocate()
-    for (let i = 0; i < series.coefficients.length; i++) {
-      copy.coefficients[i] = series.coefficients[i]
-    }
-    return copy
-  }
-
   freeToPool() {
-    SeriesPool.markFree(this)
+    seriesPool.markFree(this)
   }
 }
 
-export function toValueAndDerivatives(s: ISeries) {
+export function toValueAndDerivatives(s: Series) {
   let derivatives: number[] = []
   for (let i = 0; i < s.coefficients.length; i++) {
     derivatives.push(s.coefficients[i] * factorial(i))
@@ -99,7 +82,7 @@ export function setNumberOfDerivativesToCompute(degree: number) {
 // Functions on series objects
 ////////////////////////////////////////////////////////////////
 
-export type SeriesOrNumber = ISeries | number
+export type SeriesOrNumber = Series | number
 
 export function add(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   if (typeof a === 'number' && typeof b === 'number') {
@@ -107,21 +90,21 @@ export function add(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (typeof a === 'number' && b instanceof Series) {
-    const res = SeriesPool.allocateCopy(b)
+    const res = seriesPool.allocateCopy(b)
     res.coefficients[0] += a
     return res
   }
 
   else if (typeof b === 'number' && a instanceof Series) {
-    const res = SeriesPool.allocateCopy(a)
+    const res = seriesPool.allocateCopy(a)
     res.coefficients[0] += b
     return res
   }
 
   else if (a instanceof Series && b instanceof Series) {
-    const res = SeriesPool.allocateCopy(a)
+    const res = seriesPool.allocateCopy(a)
     for (let i = 0; i < a.coefficients.length; i++) {
-      res.coefficients[i] += a.coefficients[i]
+      res.coefficients[i] += b.coefficients[i]
     }
     return res
   }
@@ -133,7 +116,7 @@ export function negative(a: SeriesOrNumber): Series {
   if (typeof a === 'number') {
     return constantValue(- a)
   } else if (a instanceof Series) {
-    const res = SeriesPool.allocateCopy(a)
+    const res = seriesPool.allocateCopy(a)
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] *= -1
     }
@@ -149,7 +132,7 @@ export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (typeof a === 'number' && b instanceof Series) {
-    const res = SeriesPool.allocate()
+    const res = seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a - b.coefficients[i]
     }
@@ -157,7 +140,7 @@ export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (typeof b === 'number' && a instanceof Series) {
-    const res = SeriesPool.allocate()
+    const res = seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] - b
     }
@@ -165,14 +148,14 @@ export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (a instanceof Series && b instanceof Series) {
-    const res = SeriesPool.allocate()
+    const res = seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] - b.coefficients[i]
     }
     return res
   }
 
-  throw new Error('Unhandled case in add')
+  throw new Error('Unhandled case in subtract')
 }
 
 // Suppose we have two functions a(x) and b(x) such that...
@@ -199,7 +182,7 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
   }
 
   else if (typeof aInput === 'number' && bInput instanceof Series) {
-    const res = SeriesPool.allocate()
+    const res = seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput * bInput.coefficients[i]
     }
@@ -207,7 +190,7 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
   }
 
   else if (typeof bInput === 'number' && aInput instanceof Series) {
-    const res = SeriesPool.allocate()
+    const res = seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput.coefficients[i] * bInput
     }
@@ -217,7 +200,7 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
   else if (aInput instanceof Series && bInput instanceof Series) {
     const a = aInput.coefficients
     const b = bInput.coefficients
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
 
     for (let k = 0; k < a.length; k++) {
       let convolution = 0;
@@ -230,7 +213,7 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
     return h
   }
 
-  throw new Error('Unhandled case in add')
+  throw new Error('Unhandled case in multiply')
 }
 
 // We want to find h(x) such that h(x) = a(x) / b(x). We can do this by
@@ -252,7 +235,7 @@ export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   }
 
   else if (typeof aInput === 'number' && bInput instanceof Series) {
-    const res = SeriesPool.allocate()
+    const res = seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput / bInput.coefficients[i]
     }
@@ -260,7 +243,7 @@ export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   }
 
   else if (typeof bInput === 'number' && aInput instanceof Series) {
-    const res = SeriesPool.allocate()
+    const res = seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput.coefficients[i] / bInput
     }
@@ -270,7 +253,7 @@ export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   else if (aInput instanceof Series && bInput instanceof Series) {
     const a = aInput.coefficients
     const b = bInput.coefficients
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = a[0] / b[0]
 
     for (let k = 1; k < a.length; k++) {
@@ -294,7 +277,7 @@ export function sqrt(aInput: SeriesOrNumber): Series {
 
   else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = Math.sqrt(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -309,7 +292,7 @@ export function sqrt(aInput: SeriesOrNumber): Series {
     return h
   }
 
-  throw new Error('Unhandled case in divide')
+  throw new Error('Unhandled case in sqrt')
 }
 
 export function exp(aInput: SeriesOrNumber): Series {
@@ -319,7 +302,7 @@ export function exp(aInput: SeriesOrNumber): Series {
 
   else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = Math.exp(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -333,7 +316,7 @@ export function exp(aInput: SeriesOrNumber): Series {
     return h
   }
 
-  throw new Error('Unhandled case in divide')
+  throw new Error('Unhandled case in exp')
 }
 
 // This computes the natural logarithm of a. It's named log to match the
@@ -354,7 +337,7 @@ export function log(aInput: SeriesOrNumber): Series {
     }
 
     const a = aInput.coefficients
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = Math.log(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -368,7 +351,7 @@ export function log(aInput: SeriesOrNumber): Series {
     return h
   }
 
-  throw new Error('Unhandled case in divide')
+  throw new Error('Unhandled case in log')
 }
 
 function isNegative(a: SeriesOrNumber): boolean {
@@ -386,15 +369,14 @@ function isNegative(a: SeriesOrNumber): boolean {
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/pow
 export function pow(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   if (isNegative(a)) {
-    const series = SeriesPool.allocate()
+    const series = seriesPool.allocate()
     for (let i = 0; i < series.coefficients.length; i++) {
       series.coefficients[i] = NaN
     }
     return series
   }
 
-  // If we got here, then a is positive. We still need to handle the
-  // case where b is negative
+  // If we got here, then a is positive and is a valid argument to log.
   return exp(multiply(b, log(a)))
 }
 
@@ -409,10 +391,10 @@ function sinAndCos(aInput: SeriesOrNumber): Series[] {
   } else if (aInput instanceof Series) {
     const a = aInput.coefficients
 
-    const sinResult = SeriesPool.allocate()
+    const sinResult = seriesPool.allocate()
     sinResult.coefficients[0] = Math.sin(a[0])
 
-    const cosResult = SeriesPool.allocate()
+    const cosResult = seriesPool.allocate()
     cosResult.coefficients[0] = Math.cos(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -434,7 +416,7 @@ function sinAndCos(aInput: SeriesOrNumber): Series[] {
     ]
   }
 
-  throw new Error('Unhandled case in divide')
+  throw new Error('Unhandled case in sinAndCos')
 }
 
 export function sin(a: SeriesOrNumber): Series {
@@ -474,10 +456,10 @@ export function tan(aInput: SeriesOrNumber): Series {
 
   } else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const b = SeriesPool.allocate()
+    const b = seriesPool.allocate()
     b.coefficients[0] = 1 / (Math.cos(a[0]) * Math.cos(a[0]))
 
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = Math.tan(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -500,7 +482,7 @@ export function tan(aInput: SeriesOrNumber): Series {
     return h
   }
 
-  throw new Error('Unhandled case in divide')
+  throw new Error('Unhandled case in tan')
 }
 
 // To derive a the co-efficients for the series of asin(x), first
@@ -547,10 +529,10 @@ export function asin(aInput: SeriesOrNumber): Series {
     }
 
     const a = aInput.coefficients
-    const b = SeriesPool.allocate()
+    const b = seriesPool.allocate()
     b.coefficients[0] = Math.sqrt(1 - a[0] * a[0])
 
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = Math.asin(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -601,10 +583,10 @@ export function acos(aInput: SeriesOrNumber): Series {
 
     const a = aInput.coefficients
 
-    const b = SeriesPool.allocate()
+    const b = seriesPool.allocate()
     b.coefficients[0] = Math.sqrt(1 - a[0] * a[0])
 
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = Math.acos(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -661,10 +643,10 @@ export function atan(aInput: SeriesOrNumber): Series {
 
     const a = aInput.coefficients
 
-    const b = SeriesPool.allocate()
+    const b = seriesPool.allocate()
     b.coefficients[0] = 1 + a[0] * a[0]
 
-    const h = SeriesPool.allocate()
+    const h = seriesPool.allocate()
     h.coefficients[0] = Math.atan(a[0])
 
     for (let k = 1; k < a.length; k++) {

@@ -1,8 +1,7 @@
-import { ISeries } from '../autodiff'
 import {
   setNumberOfDerivativesToCompute,
   variableEvaluatedAtPoint,
-  SeriesOrNumber,
+  Series,
   toValueAndDerivatives,
 
   add,
@@ -26,8 +25,8 @@ import {
   atan,
 } from './series'
 
-function expectDerivatives(series: SeriesOrNumber, expected: number[]) {
-  const derivatives = toValueAndDerivatives(series as ISeries)
+function expectDerivatives(series: Series, expected: number[]) {
+  const derivatives = toValueAndDerivatives(series)
   expect(derivatives.length).toBe(expected.length)
   let areEqual = true
   for (let i = 0; i < derivatives.length; i++) {

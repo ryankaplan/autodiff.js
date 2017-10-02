@@ -4,6 +4,7 @@ import * as autodiff from './autodiff'
 // this just demonstrates the API.
 describe('autodiff', () => {
   it('not a real test', () => {
+    autodiff.setNumberOfDerivativesToCompute(3)
 
     let f = autodiff.compileExpression('x + 1')
     expect(f(1)).toEqual([ 2, 1, 0, 0 ])
