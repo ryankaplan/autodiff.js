@@ -8,43 +8,24 @@
 // Neidinger.
 
 import { factorial } from './factorial'
-import { Pool } from './pool'
-import { numDerivativesToCompute } from './global-settings'
-
-function newSeries(): Series2D {
-  return new Series2D()
-}
-
-function clearSeries(s: Series2D) {
-  for (let i = 0; i < s.coefficients.length; i++) {
-    s.coefficients[i] = 0
-  }
-}
-
-function copySeries(to: Series2D, from: Series2D) {
-  for (let i = 0; i < to.coefficients.length; i++) {
-    to.coefficients[i] = from.coefficients[i]
-  }
-}
-
-export const series2DPool = new Pool<Series2D>(newSeries, clearSeries, copySeries)
+import { defaultContext } from './autodiff-context'
 
 export function xEvaluatedAtPoint(value: number): Series2D {
-  const series = series2DPool.allocate()
+  const series = defaultContext.series2DPool.allocate()
   series.set(0, 0, value)
   series.set(1, 0, 1)
   return series
 }
 
 export function yEvaluatedAtPoint(value: number): Series2D {
-  const series = series2DPool.allocate()
+  const series = defaultContext.series2DPool.allocate()
   series.set(0, 0, value)
   series.set(0, 1, 1)
   return series
 }
 
 export function constantValue(value: number): Series2D {
-  const series = series2DPool.allocate()
+  const series = defaultContext.series2DPool.allocate()
   series.set(0, 0, value)
   return series
 }
@@ -67,7 +48,7 @@ export class Series2D {
   public size: number = -1
 
   constructor() {
-    const globalDegree = numDerivativesToCompute()
+    const globalDegree = defaultContext.numDerivativesToCompute()
     this.size = globalDegree + 1
     for (let y = 0; y <= globalDegree; y++) {
       for (let x = 0; x <= globalDegree; x++) {
@@ -96,7 +77,7 @@ export class Series2D {
   }
 
   freeToPool() {
-    series2DPool.markFree(this)
+    defaultContext.series2DPool.markFree(this)
   }
 }
 
@@ -124,19 +105,19 @@ export function add(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (typeof a === 'number' && b instanceof Series2D) {
-    const res = series2DPool.allocateCopy(b)
+    const res = defaultContext.series2DPool.allocateCopy(b)
     res.coefficients[0] += a
     return res
   }
 
   else if (typeof b === 'number' && a instanceof Series2D) {
-    const res = series2DPool.allocateCopy(a)
+    const res = defaultContext.series2DPool.allocateCopy(a)
     res.coefficients[0] += b
     return res
   }
 
   else if (a instanceof Series2D && b instanceof Series2D) {
-    const res = series2DPool.allocateCopy(a)
+    const res = defaultContext.series2DPool.allocateCopy(a)
     for (let i = 0; i < a.coefficients.length; i++) {
       res.coefficients[i] += b.coefficients[i]
     }
@@ -150,7 +131,7 @@ export function negative(a: Series2DOrNumber): Series2D {
   if (typeof a === 'number') {
     return constantValue(- a)
   } else if (a instanceof Series2D) {
-    const res = series2DPool.allocateCopy(a)
+    const res = defaultContext.series2DPool.allocateCopy(a)
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] *= -1
     }
@@ -166,7 +147,7 @@ export function subtract(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (typeof a === 'number' && b instanceof Series2D) {
-    const res = series2DPool.allocate()
+    const res = defaultContext.series2DPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a - b.coefficients[i]
     }
@@ -174,7 +155,7 @@ export function subtract(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (typeof b === 'number' && a instanceof Series2D) {
-    const res = series2DPool.allocate()
+    const res = defaultContext.series2DPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] - b
     }
@@ -182,7 +163,7 @@ export function subtract(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (a instanceof Series2D && b instanceof Series2D) {
-    const res = series2DPool.allocate()
+    const res = defaultContext.series2DPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] - b.coefficients[i]
     }
@@ -248,7 +229,7 @@ export function multiply(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (typeof a === 'number' && b instanceof Series2D) {
-    const res = series2DPool.allocate()
+    const res = defaultContext.series2DPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a * b.coefficients[i]
     }
@@ -256,7 +237,7 @@ export function multiply(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (typeof b === 'number' && a instanceof Series2D) {
-    const res = series2DPool.allocate()
+    const res = defaultContext.series2DPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] * b
     }
@@ -264,7 +245,7 @@ export function multiply(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (a instanceof Series2D && b instanceof Series2D) {
-    const h = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
     const size = a.size
 
     for (let i = 0; i < size; i++) {
@@ -292,7 +273,7 @@ export function divide(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (typeof a === 'number' && b instanceof Series2D) {
-    const res = series2DPool.allocate()
+    const res = defaultContext.series2DPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a / b.coefficients[i]
     }
@@ -300,7 +281,7 @@ export function divide(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   }
 
   else if (typeof b === 'number' && a instanceof Series2D) {
-    const res = series2DPool.allocate()
+    const res = defaultContext.series2DPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] / b
     }
@@ -309,7 +290,7 @@ export function divide(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
 
   else if (a instanceof Series2D && b instanceof Series2D) {
     const size = a.size
-    const h = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
 
     for (let i = 0; i < size; i++) {
       for (let j = 0; j < size; j++) {
@@ -339,7 +320,7 @@ export function exp(a: Series2DOrNumber): Series2D {
 
   else if (a instanceof Series2D) {
     const size = a.size
-    const h = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -372,7 +353,7 @@ export function log(a: Series2DOrNumber): Series2D {
 
   else if (a instanceof Series2D) {
     const size = a.size
-    const h = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -398,7 +379,7 @@ export function sqrt(a: Series2DOrNumber): Series2D {
 
   else if (a instanceof Series2D) {
     const size = a.size
-    const h = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -432,7 +413,7 @@ function isNegative(a: Series2DOrNumber): boolean {
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/pow
 export function pow(a: Series2DOrNumber, b: Series2DOrNumber): Series2D {
   if (isNegative(a)) {
-    const series = series2DPool.allocate()
+    const series = defaultContext.series2DPool.allocate()
     for (let i = 0; i < series.coefficients.length; i++) {
       series.coefficients[i] = NaN
     }
@@ -453,8 +434,8 @@ function sinAndCos(a: Series2DOrNumber): Series2D[] {
 
   } else if (a instanceof Series2D) {
     const size = a.size
-    const sinResult = series2DPool.allocate()
-    const cosResult = series2DPool.allocate()
+    const sinResult = defaultContext.series2DPool.allocate()
+    const cosResult = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -499,8 +480,8 @@ export function tan(a: Series2DOrNumber): Series2D {
 
   } else if (a instanceof Series2D) {
     const size = a.size
-    const h = series2DPool.allocate()
-    const b = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
+    const b = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -541,8 +522,8 @@ export function asin(a: Series2DOrNumber): Series2D {
     }
 
     const size = a.size
-    const h = series2DPool.allocate()
-    const b = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
+    const b = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -581,8 +562,8 @@ export function acos(a: Series2DOrNumber): Series2D {
     }
 
     const size = a.size
-    const h = series2DPool.allocate()
-    const b = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
+    const b = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -617,8 +598,8 @@ export function atan(a: Series2DOrNumber): Series2D {
     }
 
     const size = a.size
-    const h = series2DPool.allocate()
-    const b = series2DPool.allocate()
+    const h = defaultContext.series2DPool.allocate()
+    const b = defaultContext.series2DPool.allocate()
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {

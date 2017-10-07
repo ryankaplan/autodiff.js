@@ -2,6 +2,7 @@ import { Node, NodeType } from '../parser/expression-parser'
 import { SingleVariableAutodiffFunction, TwoVariableAutodiffFunction } from '../autodiff'
 import * as series from '../series/series'
 import * as series2D from '../series/series2d'
+import { defaultContext } from '../series/autodiff-context'
 
 // From here: https://stackoverflow.com/a/10624119/1026198
 function getFunctionName(f: Function) {
@@ -165,7 +166,7 @@ export function buildSingleVariableAutodiffFunctionForExpression(
 
   return (x: number) => {
     let res: number[] = null
-    series.seriesPool.trackAndReleaseAllocations(() => {
+    defaultContext.seriesPool.trackAndReleaseAllocations(() => {
       res = wrappedFunc(x, seriesAPI)
     })
     return res
@@ -193,7 +194,7 @@ export function buildTwoVariableAutodiffFunctionForExpression(
 
   return (x: number, y: number) => {
     let res: number[] = null
-    series2D.series2DPool.trackAndReleaseAllocations(() => {
+    defaultContext.series2DPool.trackAndReleaseAllocations(() => {
       res = wrappedFunc(x, y, series2DAPI)
     })
     return res

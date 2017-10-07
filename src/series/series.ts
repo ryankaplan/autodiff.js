@@ -11,36 +11,17 @@
 // x.y in the paper', it means *this* paper :-)
 
 import { factorial } from './factorial'
-import { Pool } from './pool'
-import { numDerivativesToCompute } from './global-settings'
-
-function newSeries(): Series {
-  return new Series()
-}
-
-function clearSeries(s: Series) {
-  for (let i = 0; i < s.coefficients.length; i++) {
-    s.coefficients[i] = 0
-  }
-}
-
-function copySeries(to: Series, from: Series) {
-  for (let i = 0; i < to.coefficients.length; i++) {
-    to.coefficients[i] = from.coefficients[i]
-  }
-}
-
-export const seriesPool = new Pool<Series>(newSeries, clearSeries, copySeries)
+import { defaultContext } from './autodiff-context'
 
 export function variableEvaluatedAtPoint(value: number): Series {
-  const series = seriesPool.allocate()
+  const series = defaultContext.seriesPool.allocate()
   series.coefficients[0] = value
   series.coefficients[1] = 1
   return series
 }
 
 export function constantValue(value: number): Series {
-  const series = seriesPool.allocate()
+  const series = defaultContext.seriesPool.allocate()
   series.coefficients[0] = value
   return series
 }
@@ -57,13 +38,16 @@ export class Series {
   public coefficients: number[] = []
 
   constructor() {
-    while (this.coefficients.length <= numDerivativesToCompute() + 1) {
+    // A Series should hold one term for each derivative, and one for the value of
+    // the expression.
+    const numTerms = 1 + defaultContext.numDerivativesToCompute()
+    while (this.coefficients.length < numTerms) {
       this.coefficients.push(0)
     }
   }
 
   freeToPool() {
-    seriesPool.markFree(this)
+    defaultContext.seriesPool.markFree(this)
   }
 }
 
@@ -86,19 +70,19 @@ export function add(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (typeof a === 'number' && b instanceof Series) {
-    const res = seriesPool.allocateCopy(b)
+    const res = defaultContext.seriesPool.allocateCopy(b)
     res.coefficients[0] += a
     return res
   }
 
   else if (typeof b === 'number' && a instanceof Series) {
-    const res = seriesPool.allocateCopy(a)
+    const res = defaultContext.seriesPool.allocateCopy(a)
     res.coefficients[0] += b
     return res
   }
 
   else if (a instanceof Series && b instanceof Series) {
-    const res = seriesPool.allocateCopy(a)
+    const res = defaultContext.seriesPool.allocateCopy(a)
     for (let i = 0; i < a.coefficients.length; i++) {
       res.coefficients[i] += b.coefficients[i]
     }
@@ -112,7 +96,7 @@ export function negative(a: SeriesOrNumber): Series {
   if (typeof a === 'number') {
     return constantValue(- a)
   } else if (a instanceof Series) {
-    const res = seriesPool.allocateCopy(a)
+    const res = defaultContext.seriesPool.allocateCopy(a)
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] *= -1
     }
@@ -128,7 +112,7 @@ export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (typeof a === 'number' && b instanceof Series) {
-    const res = seriesPool.allocate()
+    const res = defaultContext.seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a - b.coefficients[i]
     }
@@ -136,7 +120,7 @@ export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (typeof b === 'number' && a instanceof Series) {
-    const res = seriesPool.allocate()
+    const res = defaultContext.seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] - b
     }
@@ -144,7 +128,7 @@ export function subtract(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   }
 
   else if (a instanceof Series && b instanceof Series) {
-    const res = seriesPool.allocate()
+    const res = defaultContext.seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = a.coefficients[i] - b.coefficients[i]
     }
@@ -178,7 +162,7 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
   }
 
   else if (typeof aInput === 'number' && bInput instanceof Series) {
-    const res = seriesPool.allocate()
+    const res = defaultContext.seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput * bInput.coefficients[i]
     }
@@ -186,7 +170,7 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
   }
 
   else if (typeof bInput === 'number' && aInput instanceof Series) {
-    const res = seriesPool.allocate()
+    const res = defaultContext.seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput.coefficients[i] * bInput
     }
@@ -196,7 +180,7 @@ export function multiply(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series
   else if (aInput instanceof Series && bInput instanceof Series) {
     const a = aInput.coefficients
     const b = bInput.coefficients
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
 
     for (let k = 0; k < a.length; k++) {
       let convolution = 0;
@@ -231,7 +215,7 @@ export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   }
 
   else if (typeof aInput === 'number' && bInput instanceof Series) {
-    const res = seriesPool.allocate()
+    const res = defaultContext.seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput / bInput.coefficients[i]
     }
@@ -239,7 +223,7 @@ export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   }
 
   else if (typeof bInput === 'number' && aInput instanceof Series) {
-    const res = seriesPool.allocate()
+    const res = defaultContext.seriesPool.allocate()
     for (let i = 0; i < res.coefficients.length; i++) {
       res.coefficients[i] = aInput.coefficients[i] / bInput
     }
@@ -249,7 +233,7 @@ export function divide(aInput: SeriesOrNumber, bInput: SeriesOrNumber): Series {
   else if (aInput instanceof Series && bInput instanceof Series) {
     const a = aInput.coefficients
     const b = bInput.coefficients
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = a[0] / b[0]
 
     for (let k = 1; k < a.length; k++) {
@@ -273,7 +257,7 @@ export function sqrt(aInput: SeriesOrNumber): Series {
 
   else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = Math.sqrt(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -298,7 +282,7 @@ export function exp(aInput: SeriesOrNumber): Series {
 
   else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = Math.exp(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -333,7 +317,7 @@ export function log(aInput: SeriesOrNumber): Series {
     }
 
     const a = aInput.coefficients
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = Math.log(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -365,7 +349,7 @@ function isNegative(a: SeriesOrNumber): boolean {
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/pow
 export function pow(a: SeriesOrNumber, b: SeriesOrNumber): Series {
   if (isNegative(a)) {
-    const series = seriesPool.allocate()
+    const series = defaultContext.seriesPool.allocate()
     for (let i = 0; i < series.coefficients.length; i++) {
       series.coefficients[i] = NaN
     }
@@ -387,10 +371,10 @@ function sinAndCos(aInput: SeriesOrNumber): Series[] {
   } else if (aInput instanceof Series) {
     const a = aInput.coefficients
 
-    const sinResult = seriesPool.allocate()
+    const sinResult = defaultContext.seriesPool.allocate()
     sinResult.coefficients[0] = Math.sin(a[0])
 
-    const cosResult = seriesPool.allocate()
+    const cosResult = defaultContext.seriesPool.allocate()
     cosResult.coefficients[0] = Math.cos(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -452,10 +436,10 @@ export function tan(aInput: SeriesOrNumber): Series {
 
   } else if (aInput instanceof Series) {
     const a = aInput.coefficients
-    const b = seriesPool.allocate()
+    const b = defaultContext.seriesPool.allocate()
     b.coefficients[0] = 1 / (Math.cos(a[0]) * Math.cos(a[0]))
 
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = Math.tan(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -525,10 +509,10 @@ export function asin(aInput: SeriesOrNumber): Series {
     }
 
     const a = aInput.coefficients
-    const b = seriesPool.allocate()
+    const b = defaultContext.seriesPool.allocate()
     b.coefficients[0] = Math.sqrt(1 - a[0] * a[0])
 
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = Math.asin(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -579,10 +563,10 @@ export function acos(aInput: SeriesOrNumber): Series {
 
     const a = aInput.coefficients
 
-    const b = seriesPool.allocate()
+    const b = defaultContext.seriesPool.allocate()
     b.coefficients[0] = Math.sqrt(1 - a[0] * a[0])
 
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = Math.acos(a[0])
 
     for (let k = 1; k < a.length; k++) {
@@ -639,10 +623,10 @@ export function atan(aInput: SeriesOrNumber): Series {
 
     const a = aInput.coefficients
 
-    const b = seriesPool.allocate()
+    const b = defaultContext.seriesPool.allocate()
     b.coefficients[0] = 1 + a[0] * a[0]
 
-    const h = seriesPool.allocate()
+    const h = defaultContext.seriesPool.allocate()
     h.coefficients[0] = Math.atan(a[0])
 
     for (let k = 1; k < a.length; k++) {

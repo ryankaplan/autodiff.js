@@ -3,21 +3,20 @@ export {
   SeriesOrNumber,
 } from './series/series'
 
-export {
-  setNumberOfDerivativesToCompute
-} from './series/global-settings'
-
-import {
-  parseExpression
-} from './parser/expression-parser'
-
 import {
   buildSingleVariableAutodiffFunctionForExpression,
   buildTwoVariableAutodiffFunctionForExpression,
 } from './code-generation/code-generator'
 
+import { parseExpression } from './parser/expression-parser'
+import { defaultContext } from './series/autodiff-context'
+
 export type SingleVariableAutodiffFunction = (x: number) => number[]
 export type TwoVariableAutodiffFunction = (x: number, y: number) => number[]
+
+export function setNumberOfDerivativesToCompute(n: number) {
+  defaultContext.setNumberOfDerivativesToCompute(n)
+}
 
 export function compileFunction(independentVariable: string, exprString: string): SingleVariableAutodiffFunction {
   const { expression, userReadableError } = parseExpression(exprString)

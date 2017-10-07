@@ -1,7 +1,6 @@
-import { setNumberOfDerivativesToCompute } from './global-settings'
+import { defaultContext } from './autodiff-context'
 
 import {
-  series2DPool,
   xEvaluatedAtPoint,
   yEvaluatedAtPoint,
   constantValue,
@@ -47,12 +46,11 @@ function expectDerivatives(series: Series2D, expected: number[]) {
   }
 }
 
-beforeEach(() => {
-  series2DPool.forgetFreeElements()
-  setNumberOfDerivativesToCompute(2)
-})
-
 describe('series2D', () => {
+  beforeEach(() => {
+    defaultContext.setNumberOfDerivativesToCompute(2)
+  })
+
   it('convolve', () => {
     const a = new Series2D()
     a.coefficients = [

@@ -8,11 +8,11 @@ describe('autodiff', () => {
 
     // Compile a single-variable function with independent variable x
     let f = autodiff.compileFunction('x', 'x + 1')
-    expect(f(1)).toEqual([2, 1, 0, 0])
+    expect(f(1)).toEqual([2, 1, 0])
 
     // Compile a single-variable function with independent variable t
     f = autodiff.compileFunction('t', 't * 5')
-    expect(f(2)).toEqual([10, 5, 0, 0])
+    expect(f(2)).toEqual([10, 5, 0])
 
     // Compute a multi-variable function with independent variables x and y
     const x = 3

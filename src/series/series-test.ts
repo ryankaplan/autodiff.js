@@ -1,7 +1,6 @@
-import { setNumberOfDerivativesToCompute } from './global-settings'
+import { defaultContext } from './autodiff-context'
 
 import {
-  seriesPool,
   variableEvaluatedAtPoint,
   Series,
   toValueAndDerivatives,
@@ -42,12 +41,11 @@ function expectDerivatives(series: Series, expected: number[]) {
   }
 }
 
-beforeEach(() => {
-  seriesPool.forgetFreeElements()
-  setNumberOfDerivativesToCompute(3)
-})
-
 describe('series', () => {
+  beforeEach(() => {
+    defaultContext.setNumberOfDerivativesToCompute(3)
+  })
+
   it('negative', () => {
     // f(x) = - x at x = 2
     const x = variableEvaluatedAtPoint(2)

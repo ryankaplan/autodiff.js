@@ -4,3 +4,4 @@ node_modules
 _bundles
 lib
 lib-esm
+.DS_Store
