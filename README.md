@@ -11,7 +11,7 @@ In the below example, we compute the first 10 derivatives of the function x ^ (x
 ```ts
 import * as autodiff from 'autodiff'
 
-autodiff.setNumDerivativesToCompute(100)
+autodiff.setNumDerivativesToCompute(10)
 
 const f = autodiff.compileFunction('x', 'x * 3 + x ^ 2 / (x + 1)')
 
